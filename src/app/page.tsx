@@ -1,34 +1,37 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { fmtDate } from '@/lib/auth';
+import DeleteDocument from '@/components/DeleteDocument';
+import FilterSelect from '@/components/FilterSelect';
+import LikeButtons from '@/components/LikeButtons';
 
 export const dynamic = 'force-dynamic';
+
+const PAGE_SIZE = 12;
+const UUID = /^[0-9a-f-]{36}$/i;
 
 function abbr(name: string) {
   return name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
 }
 
-export default async function Home() {
+/** Bỏ dấu tiếng Việt để khớp cột search_text trong database */
+function norm(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[%_,()*\\]/g, ' ')
+    .trim();
+}
+
+type SP = { q?: string; page?: string; tab?: string; sub?: string; src?: string; sort?: string; error?: string };
+
+export default async function Home({ searchParams }: { searchParams: SP }) {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { data: subjects } = await supabase.from('subjects').select('id,name,description').order('sort');
-
-  const grid = (
-    <div className="grid">
-      {(subjects ?? []).map((s) => (
-        <Link key={s.id} href={user ? `/subjects/${s.id}` : '/login'} className="subject">
-          <div className="s-badge">{abbr(s.name)}</div>
-          <div>
-            <div className="name">{s.name}</div>
-            <div className="desc">{s.description}</div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  );
 
   const fbBanner = (
     <a
@@ -45,11 +48,21 @@ export default async function Home() {
       <span className="btn sm">Tham gia ngay →</span>
     </a>
   );
+  const errBox = searchParams.error ? <div className="msg err" role="alert">{searchParams.error}</div> : null;
 
+  /* ---------- Chưa đăng nhập: giới thiệu + danh sách môn ---------- */
   if (!user) {
+    const { data: subjects } = await supabase
+      .from('subjects')
+      .select('id,name,description')
+      .or('owner_id.is.null,is_public.eq.true')
+      .order('sort')
+      .order('name')
+      .limit(30);
     return (
       <main className="main">
         {fbBanner}
+        {errBox}
         <section className="hero">
           <div className="hero-text">
             <h1>Ôn thi bằng đề do <span className="hl">AI</span> tạo từ chính tài liệu của bạn</h1>
@@ -64,28 +77,92 @@ export default async function Home() {
           </div>
         </section>
         <h2>Các môn học hiện có</h2>
-        {grid}
+        <div className="grid">
+          {(subjects ?? []).map((s: any) => (
+            <div key={s.id} className="subject-wrap">
+              <Link href="/login" className="subject">
+                <div className="s-badge">{abbr(s.name)}</div>
+                <div>
+                  <div className="name">{s.name}</div>
+                  <div className="desc">{s.description}</div>
+                </div>
+              </Link>
+            </div>
+          ))}
+        </div>
       </main>
     );
   }
 
-  const [{ count: attemptCount }, { count: wrongCount }, { data: recent }] = await Promise.all([
-    supabase.from('attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('wrong_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase
-      .from('attempts')
-      .select('id,score,total,created_at,quizzes(title)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(5),
-  ]);
+  /* ---------- Đã đăng nhập: kho tài liệu ---------- */
+  const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const isAdmin = prof?.role === 'admin';
+
+  const q = (searchParams.q ?? '').trim().slice(0, 80);
+  const tab = searchParams.tab === 'mine' ? 'mine' : 'all';
+  const sub = UUID.test(searchParams.sub ?? '') ? (searchParams.sub as string) : '';
+  const src = searchParams.src === 'system' || searchParams.src === 'user' ? searchParams.src : '';
+  const sort = searchParams.sort === 'likes' || searchParams.sort === 'title' ? searchParams.sort : 'new';
+  const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
+
+  let query: any = supabase
+    .from('documents')
+    .select('id,title,subject_id,owner_id,owner_name,is_public,likes,dislikes,size,created_at,subjects(name)', {
+      count: 'exact',
+    });
+  if (tab === 'mine') query = query.eq('owner_id', user.id);
+  else query = query.eq('is_public', true).eq('hidden', false);
+  if (sub) query = query.eq('subject_id', sub);
+  if (src === 'system') query = query.is('owner_id', null);
+  if (src === 'user') query = query.not('owner_id', 'is', null);
+  if (q) query = query.ilike('search_text', `%${norm(q)}%`);
+  if (sort === 'likes') query = query.order('likes', { ascending: false }).order('created_at', { ascending: false });
+  else if (sort === 'title') query = query.order('title', { ascending: true });
+  else query = query.order('created_at', { ascending: false });
+  query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+
+  const [{ data: docs, count }, { data: subjectList }, { count: attemptCount }, { count: wrongCount }, { data: recent }] =
+    await Promise.all([
+      query,
+      supabase.from('subjects').select('id,name').or('owner_id.is.null,is_public.eq.true,owner_id.eq.' + user.id).order('sort').order('name'),
+      supabase.from('attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('wrong_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase
+        .from('attempts')
+        .select('id,score,total,created_at,quizzes(title)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+    ]);
+
+  const ids = (docs ?? []).map((d: any) => d.id as string);
+  const { data: reacts } = ids.length
+    ? await supabase.from('doc_reactions').select('document_id,kind').in('document_id', ids)
+    : { data: [] as any[] };
+  const mineMap = new Map<string, 'like' | 'dislike'>((reacts ?? []).map((r: any) => [r.document_id, r.kind]));
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+  const href = (p: number, over: Partial<SP> = {}) => {
+    const v = { q, tab, sub, src, sort, ...over } as Record<string, string>;
+    const u = new URLSearchParams();
+    if (v.q) u.set('q', v.q);
+    if (v.tab === 'mine') u.set('tab', 'mine');
+    if (v.sub) u.set('sub', v.sub);
+    if (v.src) u.set('src', v.src);
+    if (v.sort && v.sort !== 'new') u.set('sort', v.sort);
+    if (p > 1) u.set('page', String(p));
+    const s = u.toString();
+    return s ? `/?${s}` : '/';
+  };
+  const hasFilter = !!(q || sub || src || sort !== 'new');
 
   return (
     <main className="main">
       {fbBanner}
+      {errBox}
       <div className="head">
-        <h1>Chọn môn để ôn</h1>
-        <p className="muted">Mở một môn, chọn tài liệu và tạo đề bằng AI.</p>
+        <h1>Kho tài liệu</h1>
+        <p className="muted">Chọn một tài liệu, AI sẽ tạo đề ôn từ đó. Thả tim cho tài liệu hay.</p>
       </div>
 
       <div className="stats">
@@ -99,7 +176,96 @@ export default async function Home() {
         </div>
       </div>
 
-      {grid}
+      <form action="/" method="get" className="filters">
+        {tab === 'mine' && <input type="hidden" name="tab" value="mine" />}
+        <div className="toolbar">
+          <div className="tabs">
+            <Link href={href(1, { tab: 'all' })} className={tab === 'all' ? 'on' : ''}>Kho công khai</Link>
+            <Link href={href(1, { tab: 'mine' })} className={tab === 'mine' ? 'on' : ''}>Của tôi</Link>
+          </div>
+          <div className="search" role="search">
+            <input type="text" name="q" defaultValue={q} placeholder="Tìm tài liệu hoặc người đăng (không cần gõ dấu)" aria-label="Tìm tài liệu" />
+            <button className="btn sm" type="submit">Tìm</button>
+          </div>
+        </div>
+        <div className="filter-row">
+          <FilterSelect
+            name="sub"
+            label="Môn học"
+            value={sub}
+            options={[{ v: '', t: 'Tất cả môn' }, ...(subjectList ?? []).map((s: any) => ({ v: s.id as string, t: s.name as string }))]}
+          />
+          <FilterSelect
+            name="src"
+            label="Nguồn"
+            value={src}
+            options={[
+              { v: '', t: 'Tất cả' },
+              { v: 'system', t: 'Hệ thống' },
+              { v: 'user', t: 'Thành viên đăng' },
+            ]}
+          />
+          <FilterSelect
+            name="sort"
+            label="Sắp xếp"
+            value={sort}
+            options={[
+              { v: 'new', t: 'Mới nhất' },
+              { v: 'likes', t: 'Nhiều tim nhất' },
+              { v: 'title', t: 'Tên A đến Z' },
+            ]}
+          />
+          {hasFilter && <Link href={href(1, { q: '', sub: '', src: '', sort: 'new' })} className="small">Xóa bộ lọc</Link>}
+          {sub && <Link href={`/subjects/${sub}`} className="small">Mở môn này để thêm tài liệu →</Link>}
+        </div>
+      </form>
+
+      {docs && docs.length > 0 ? (
+        <div className="grid">
+          {docs.map((d: any) => {
+            const subjName = d.subjects?.name ?? 'Môn học';
+            const mine = d.owner_id === user.id;
+            const reactable = d.is_public && d.owner_id !== null && !mine;
+            return (
+              <div key={d.id} className="subject-wrap doc">
+                <Link href={`/subjects/${d.subject_id}?doc=${d.id}`} className="subject">
+                  <div className="s-badge">{abbr(subjName)}</div>
+                  <div>
+                    <div className="name">{d.title}</div>
+                    <div className="desc">{subjName} · {d.size.toLocaleString('vi-VN')} ký tự</div>
+                    <div className="by">
+                      {d.owner_id === null ? 'Hệ thống' : mine ? 'Của bạn' : `Đăng bởi ${d.owner_name ?? 'thành viên'}`}
+                      {!d.is_public ? ' · Riêng tư' : ''}
+                    </div>
+                  </div>
+                </Link>
+                <div className="doc-foot">
+                  {reactable ? (
+                    <LikeButtons docId={d.id} likes={d.likes} dislikes={d.dislikes} mine={mineMap.get(d.id) ?? null} />
+                  ) : (
+                    <span className="react-static mono">♥ {d.likes} · 👎 {d.dislikes}</span>
+                  )}
+                  <span className="small muted">{fmtDate(d.created_at).split(' ')[0]}</span>
+                </div>
+                {(isAdmin || mine) && <DeleteDocument docId={d.id} subjectId={d.subject_id} title={d.title} />}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card empty">
+          <strong>{hasFilter ? 'Không có tài liệu phù hợp' : tab === 'mine' ? 'Bạn chưa đăng tài liệu nào' : 'Chưa có tài liệu công khai'}</strong>
+          {hasFilter ? 'Thử đổi hoặc xóa bộ lọc.' : 'Vào một môn học rồi chọn "Thêm tài liệu cho môn này".'}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <nav className="pager" aria-label="Phân trang">
+          <Link href={href(page - 1)} className="btn ghost sm" aria-disabled={page <= 1}>← Trước</Link>
+          <span className="small muted mono">{page}/{totalPages}</span>
+          <Link href={href(page + 1)} className="btn ghost sm" aria-disabled={page >= totalPages}>Sau →</Link>
+        </nav>
+      )}
 
       {recent && recent.length > 0 && (
         <section className="stack">

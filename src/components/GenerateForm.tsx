@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { KINDS, LEVELS } from '@/lib/types';
+import LikeButtons from '@/components/LikeButtons';
 
 interface Doc {
   id: string;
@@ -10,11 +11,16 @@ interface Doc {
   is_public: boolean;
   owner_id: string | null;
   size: number;
+  owner_name?: string | null;
+  likes?: number;
+  dislikes?: number;
+  mine?: 'like' | 'dislike' | null;
+  reactable?: boolean; // true nếu là tài liệu công khai của người khác
 }
 
-export default function GenerateForm({ subjectId, docs }: { subjectId: string; docs: Doc[] }) {
+export default function GenerateForm({ subjectId, docs, initialPicked }: { subjectId: string; docs: Doc[]; initialPicked?: string[] }) {
   const router = useRouter();
-  const [picked, setPicked] = useState<string[]>(docs.length ? [docs[0].id] : []);
+  const [picked, setPicked] = useState<string[]>(initialPicked && initialPicked.length ? initialPicked : docs.length ? [docs[0].id] : []);
   const [n, setN] = useState(10);
   const [level, setLevel] = useState('vua');
   const [kind, setKind] = useState('mcq');
@@ -69,15 +75,20 @@ export default function GenerateForm({ subjectId, docs }: { subjectId: string; d
       {docs.length > 0 ? (
         <div className="docpick" role="group" aria-label="Chọn tài liệu">
           {docs.map((d) => (
-            <label key={d.id}>
-              <input type="checkbox" checked={picked.includes(d.id)} onChange={() => toggle(d.id)} />
-              <span>
-                {d.title}
-                <span className="small muted">
-                  {' '}· {d.owner_id === null ? 'Hệ thống' : d.is_public ? 'Công khai' : 'Của bạn'} · {d.size.toLocaleString('vi-VN')} ký tự
+            <div key={d.id} className="docrow">
+              <label>
+                <input type="checkbox" checked={picked.includes(d.id)} onChange={() => toggle(d.id)} />
+                <span>
+                  {d.title}
+                  <span className="small muted">
+                    {' '}· {d.owner_id === null ? 'Hệ thống' : d.is_public ? `Công khai${d.owner_name ? ' · ' + d.owner_name : ''}` : 'Của bạn'} · {d.size.toLocaleString('vi-VN')} ký tự
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              {d.reactable && (
+                <LikeButtons docId={d.id} likes={d.likes ?? 0} dislikes={d.dislikes ?? 0} mine={d.mine ?? null} />
+              )}
+            </div>
           ))}
         </div>
       ) : (

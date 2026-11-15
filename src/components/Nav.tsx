@@ -26,14 +26,15 @@ export default async function Nav() {
         {user ? (
           <>
             <nav className="nav-links" aria-label="Điều hướng chính">
-              <Link href="/">Môn học</Link>
+              <Link href="/">Kho tài liệu</Link>
+              <Link href="/my-docs">Tài liệu của tôi</Link>
               <Link href="/history">Lịch sử</Link>
               <Link href="/review">Ôn lại</Link>
               <Link href="/classes">Lớp học</Link>
             </nav>
             <div className="nav-user">
               <span className="small muted">
-                {name} · {role === 'teacher' ? 'Giáo viên' : 'Học sinh'}
+                {name} · {role === 'admin' ? 'Quản trị' : role === 'teacher' ? 'Giáo viên' : 'Học sinh'}
               </span>
               <form action={signOut}>
                 <button className="btn ghost sm" type="submit">Đăng xuất</button>

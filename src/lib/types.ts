@@ -1,4 +1,4 @@
-export type Role = 'student' | 'teacher';
+export type Role = 'student' | 'teacher' | 'admin';
 export type Level = 'de' | 'vua' | 'kho';
 // mcq: trắc nghiệm | tf: đúng/sai | mix: trắc nghiệm + đúng/sai | essay: tự luận | full: trắc nghiệm + tự luận
 export type Kind = 'mcq' | 'tf' | 'mix' | 'essay' | 'full';
