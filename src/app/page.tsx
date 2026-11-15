@@ -4,6 +4,10 @@ import { fmtDate } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+function abbr(name: string) {
+  return name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
+}
+
 export default async function Home() {
   const supabase = createClient();
   const {
@@ -16,25 +20,47 @@ export default async function Home() {
     <div className="grid">
       {(subjects ?? []).map((s) => (
         <Link key={s.id} href={user ? `/subjects/${s.id}` : '/login'} className="subject">
-          <div className="name">{s.name}</div>
-          <div className="desc">{s.description}</div>
+          <div className="s-badge">{abbr(s.name)}</div>
+          <div>
+            <div className="name">{s.name}</div>
+            <div className="desc">{s.description}</div>
+          </div>
         </Link>
       ))}
     </div>
   );
 
+  const fbBanner = (
+    <a
+      href="https://www.facebook.com/share/g/1E46yEaYb8/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fb-banner"
+    >
+      <span className="fb-icon" aria-hidden="true">f</span>
+      <span className="fb-text">
+        <strong>Tham gia cộng đồng Facebook</strong> của chúng tôi để nhận được những tài liệu học tập hữu ích,
+        cập nhật công cụ AI mới nhất và cùng nhau trao đổi, học hỏi!
+      </span>
+      <span className="btn sm">Tham gia ngay →</span>
+    </a>
+  );
+
   if (!user) {
     return (
       <main className="main">
+        {fbBanner}
         <section className="hero">
-          <h1>Ôn thi bằng đề do AI tạo từ chính tài liệu của bạn</h1>
-          <p>
-            Chọn môn học, chọn tài liệu, AI soạn câu hỏi kèm đáp án và giải thích. Làm bài, xem điểm theo từng
-            chủ đề, ôn lại đúng những câu hay sai. Giáo viên có thể tạo lớp và giao bài.
-          </p>
-          <div className="row" style={{ justifyContent: 'flex-start' }}>
-            <Link href="/register" className="btn">Bắt đầu miễn phí</Link>
-            <Link href="/login" className="btn ghost">Đăng nhập</Link>
+          <div className="hero-text">
+            <h1>Ôn thi bằng đề do <span className="hl">AI</span> tạo từ chính tài liệu của bạn</h1>
+            <p>
+              Chọn môn học, chọn tài liệu, AI soạn câu hỏi kèm đáp án và giải thích. Làm bài, xem điểm theo từng
+              chủ đề, ôn lại đúng những câu hay sai. Giáo viên có thể tạo lớp và giao bài.
+            </p>
+            <div className="row" style={{ justifyContent: 'flex-start' }}>
+              <Link href="/register" className="btn">▶ Bắt đầu miễn phí</Link>
+              <Link href="/login" className="btn ghost">Đăng nhập</Link>
+            </div>
           </div>
         </section>
         <h2>Các môn học hiện có</h2>
@@ -56,6 +82,7 @@ export default async function Home() {
 
   return (
     <main className="main">
+      {fbBanner}
       <div className="head">
         <h1>Chọn môn để ôn</h1>
         <p className="muted">Mở một môn, chọn tài liệu và tạo đề bằng AI.</p>

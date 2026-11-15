@@ -3,7 +3,8 @@ import Nav from '@/components/Nav';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Ôn tập AI',
+  title: 'Edulab AI',
+  icons: { icon: '/logo.png' },
   description: 'Ôn thi bằng đề trắc nghiệm do AI tạo từ chính tài liệu môn học của bạn.',
 };
 

@@ -181,3 +181,48 @@ details summary { cursor: pointer; color: var(--accent); font-weight: 500; }
   .stat .num { font-size: 22px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ===== Giao diện Edulab AI ===== */
+body {
+  background: var(--bg) url('/bg.jpg') center top / cover no-repeat fixed;
+}
+.nav { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); }
+.brand { display: flex; align-items: center; margin-right: 8px; }
+.brand img { height: 35px; width: auto; }
+@media (prefers-color-scheme: dark) {
+  body { background-image: none; }
+  .nav { background: var(--surface); }
+}
+
+.fb-banner {
+  display: flex; align-items: center; gap: 14px 18px; flex-wrap: wrap;
+  padding: 14px 20px; border-radius: 14px; text-decoration: none; color: var(--ink);
+  background: var(--accent-soft); border: 1px solid var(--line);
+}
+.fb-banner:hover { border-color: var(--accent); }
+.fb-icon {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: #1877f2; color: #fff; font: 700 24px/1 var(--font);
+}
+.fb-text { flex: 1 1 280px; min-width: 0; }
+
+.hero { flex-direction: row; align-items: center; justify-content: space-between; gap: 24px; }
+.hero-text { display: flex; flex-direction: column; gap: 14px; flex: 1 1 380px; }
+.hero-img { width: min(420px, 100%); height: auto; flex: 0 1 420px; }
+.hl { color: var(--accent); }
+@media (max-width: 700px) { .hero { flex-direction: column-reverse; } }
+
+/* Ô chữ viết tắt cho thẻ môn học */
+.subject { display: flex; align-items: center; gap: 14px; border-radius: 14px; }
+.s-badge {
+  flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
+  font: 700 13px/1 var(--mono); letter-spacing: 0.02em;
+  color: var(--c, var(--accent));
+  background: color-mix(in srgb, var(--c, var(--accent)) 14%, var(--surface));
+}
+.grid > .subject:nth-child(6n+1) { --c: #2f52d0; }
+.grid > .subject:nth-child(6n+2) { --c: #7c3aed; }
+.grid > .subject:nth-child(6n+3) { --c: #e07a10; }
+.grid > .subject:nth-child(6n+4) { --c: #16764d; }
+.grid > .subject:nth-child(6n+5) { --c: #0e8fb0; }
+.grid > .subject:nth-child(6n+6) { --c: #c2410c; }

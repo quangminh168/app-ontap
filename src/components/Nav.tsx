@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
 import { signOut } from '@/app/auth/actions';
 
@@ -19,7 +20,9 @@ export default async function Nav() {
   return (
     <header className="nav">
       <div className="nav-in">
-        <Link href="/" className="brand">Ôn tập AI</Link>
+        <Link href="/" className="brand" aria-label="Edulab AI">
+          <Image src="/logo.png" alt="Edulab AI" width={140} height={35} priority />
+        </Link>
         {user ? (
           <>
             <nav className="nav-links" aria-label="Điều hướng chính">
