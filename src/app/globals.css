@@ -277,3 +277,51 @@ body {
   padding: 8px 18px 12px; border-top: 1px solid var(--line);
 }
 .react-static { font-size: 13px; color: var(--muted); }
+
+/* ===== Đọc tài liệu và ghi chú ===== */
+.main.wide { max-width: 1180px; }
+.reader-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.reader-card { padding: 24px 28px; }
+.reader { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; font-size: 16px; padding-bottom: 120px; }
+.notes-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.notes-list { display: flex; flex-direction: column; gap: 8px; }
+.note-item {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+}
+.note-item:hover, .note-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.note-quote { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.note-text { font-size: 13.5px; overflow-wrap: anywhere; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+.hl { border-radius: 3px; cursor: pointer; }
+.hl-yellow { background: rgba(250, 204, 21, 0.5); }
+.hl-green { background: rgba(74, 222, 128, 0.45); }
+.hl-pink { background: rgba(244, 114, 182, 0.4); }
+.hl-blue { background: rgba(96, 165, 250, 0.45); }
+.sw.hl-yellow { background: #facc15; } .sw.hl-green { background: #4ade80; }
+.sw.hl-pink { background: #f472b6; } .sw.hl-blue { background: #60a5fa; }
+.hl.has-note { border-bottom: 2px dotted var(--ink); }
+.hl.sel { outline: 2px solid var(--accent); }
+
+.selbar {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
+  bottom: max(16px, env(safe-area-inset-bottom)); width: max-content; max-width: 94vw;
+  display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; justify-content: center;
+  padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+}
+.selbar.editor { flex-direction: column; align-items: stretch; width: min(560px, 94vw); }
+.note-quote-line { overflow-wrap: anywhere; }
+.cbtn {
+  display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); cursor: pointer; font-size: 13.5px;
+}
+.cbtn:hover:not(:disabled) { border-color: var(--accent); }
+.cbtn.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.cbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (max-width: 900px) {
+  .reader-layout { grid-template-columns: 1fr; }
+  .notes-panel { position: static; max-height: none; }
+  .reader-card { padding: 18px; }
+}

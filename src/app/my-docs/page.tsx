@@ -12,6 +12,15 @@ export default async function MyDocs() {
     .eq('owner_id', me.id)
     .order('created_at', { ascending: false });
 
+  const { data: likedRows } = await supabase
+    .from('doc_reactions')
+    .select('created_at,documents(id,title,subject_id,owner_name,likes,dislikes,size,subjects(name))')
+    .eq('user_id', me.id)
+    .eq('kind', 'like')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  const liked = (likedRows ?? []).map((r: any) => r.documents).filter(Boolean);
+
   return (
     <main className="main">
       <div className="head">
@@ -29,7 +38,7 @@ export default async function MyDocs() {
           {docs.map((d: any) => (
             <div key={d.id} className="item">
               <div className="item-main">
-                <div className="item-title">{d.title}</div>
+                <div className="item-title"><Link href={`/docs/${d.id}`}>{d.title}</Link></div>
                 <div className="small muted">
                   <Link href={`/subjects/${d.subject_id}`}>{d.subjects?.name ?? 'Môn học'}</Link>
                   {' '}· {fmtDate(d.created_at)} · {d.size.toLocaleString('vi-VN')} ký tự
@@ -49,6 +58,30 @@ export default async function MyDocs() {
           ))}
         </div>
       )}
+
+      <section className="stack">
+        <h2>Tài liệu đã thả tim</h2>
+        {liked.length === 0 ? (
+          <div className="card empty">
+            <strong>Bạn chưa thả tim tài liệu nào</strong>
+            Bấm ♥ ở tài liệu hay trong <Link href="/">Kho tài liệu</Link> để lưu vào đây.
+          </div>
+        ) : (
+          <div className="list">
+            {liked.map((d: any) => (
+              <Link key={d.id} href={`/docs/${d.id}`} className="item" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div className="item-main">
+                  <div className="item-title">{d.title}</div>
+                  <div className="small muted">
+                    {d.subjects?.name ?? 'Môn học'} · Đăng bởi {d.owner_name ?? 'thành viên'} · {d.size.toLocaleString('vi-VN')} ký tự
+                  </div>
+                </div>
+                <span className="small mono">♥ {d.likes}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }

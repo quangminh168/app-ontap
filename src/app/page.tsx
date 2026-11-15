@@ -105,13 +105,30 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   const sort = searchParams.sort === 'likes' || searchParams.sort === 'title' ? searchParams.sort : 'new';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
+  // Tab "Của tôi" gồm tài liệu mình đăng và tài liệu mình đã thả tim
+  let likedIds: string[] = [];
+  if (tab === 'mine') {
+    const { data: lk } = await supabase
+      .from('doc_reactions')
+      .select('document_id')
+      .eq('user_id', user.id)
+      .eq('kind', 'like')
+      .limit(200);
+    likedIds = (lk ?? []).map((r: any) => r.document_id as string);
+  }
+
   let query: any = supabase
     .from('documents')
     .select('id,title,subject_id,owner_id,owner_name,is_public,likes,dislikes,size,created_at,subjects(name)', {
       count: 'exact',
     });
-  if (tab === 'mine') query = query.eq('owner_id', user.id);
-  else query = query.eq('is_public', true).eq('hidden', false);
+  if (tab === 'mine') {
+    query = likedIds.length
+      ? query.or(`owner_id.eq.${user.id},id.in.(${likedIds.join(',')})`)
+      : query.eq('owner_id', user.id);
+  } else {
+    query = query.eq('is_public', true).eq('hidden', false);
+  }
   if (sub) query = query.eq('subject_id', sub);
   if (src === 'system') query = query.is('owner_id', null);
   if (src === 'user') query = query.not('owner_id', 'is', null);
@@ -181,7 +198,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         <div className="toolbar">
           <div className="tabs">
             <Link href={href(1, { tab: 'all' })} className={tab === 'all' ? 'on' : ''}>Kho công khai</Link>
-            <Link href={href(1, { tab: 'mine' })} className={tab === 'mine' ? 'on' : ''}>Của tôi</Link>
+            <Link href={href(1, { tab: 'mine' })} className={tab === 'mine' ? 'on' : ''}>Của tôi &amp; đã thích</Link>
           </div>
           <div className="search" role="search">
             <input type="text" name="q" defaultValue={q} placeholder="Tìm tài liệu hoặc người đăng (không cần gõ dấu)" aria-label="Tìm tài liệu" />
@@ -228,7 +245,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
             const reactable = d.is_public && d.owner_id !== null && !mine;
             return (
               <div key={d.id} className="subject-wrap doc">
-                <Link href={`/subjects/${d.subject_id}?doc=${d.id}`} className="subject">
+                <Link href={`/docs/${d.id}`} className="subject">
                   <div className="s-badge">{abbr(subjName)}</div>
                   <div>
                     <div className="name">{d.title}</div>
@@ -236,6 +253,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
                     <div className="by">
                       {d.owner_id === null ? 'Hệ thống' : mine ? 'Của bạn' : `Đăng bởi ${d.owner_name ?? 'thành viên'}`}
                       {!d.is_public ? ' · Riêng tư' : ''}
+                      {mineMap.get(d.id) === 'like' ? ' · Đã thích' : ''}
                     </div>
                   </div>
                 </Link>
@@ -245,7 +263,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
                   ) : (
                     <span className="react-static mono">♥ {d.likes} · 👎 {d.dislikes}</span>
                   )}
-                  <span className="small muted">{fmtDate(d.created_at).split(' ')[0]}</span>
+                  <Link href={`/subjects/${d.subject_id}?doc=${d.id}`} className="btn ghost sm">Tạo đề</Link>
                 </div>
                 {(isAdmin || mine) && <DeleteDocument docId={d.id} subjectId={d.subject_id} title={d.title} />}
               </div>
@@ -254,7 +272,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
         </div>
       ) : (
         <div className="card empty">
-          <strong>{hasFilter ? 'Không có tài liệu phù hợp' : tab === 'mine' ? 'Bạn chưa đăng tài liệu nào' : 'Chưa có tài liệu công khai'}</strong>
+          <strong>{hasFilter ? 'Không có tài liệu phù hợp' : tab === 'mine' ? 'Bạn chưa đăng hoặc thả tim tài liệu nào' : 'Chưa có tài liệu công khai'}</strong>
           {hasFilter ? 'Thử đổi hoặc xóa bộ lọc.' : 'Vào một môn học rồi chọn "Thêm tài liệu cho môn này".'}
         </div>
       )}

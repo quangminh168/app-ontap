@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { KINDS, LEVELS } from '@/lib/types';
 import LikeButtons from '@/components/LikeButtons';
@@ -85,6 +86,7 @@ export default function GenerateForm({ subjectId, docs, initialPicked }: { subje
                   </span>
                 </span>
               </label>
+              <Link href={`/docs/${d.id}`} className="btn ghost sm" style={{ marginTop: 4 }}>Đọc</Link>
               {d.reactable && (
                 <LikeButtons docId={d.id} likes={d.likes ?? 0} dislikes={d.dislikes ?? 0} mine={d.mine ?? null} />
               )}
