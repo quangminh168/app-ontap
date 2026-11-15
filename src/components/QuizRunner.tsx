@@ -3,6 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import type { PublicQuestion } from '@/lib/types';
+import { MAX_ESSAY_ANSWER_CHARS } from '@/lib/quiz';
+
+type Ans = number | string; // số: chỉ số đáp án (-1 = chưa chọn); chuỗi: bài làm tự luận
+
+function isDone(q: PublicQuestion, a: Ans) {
+  return q.type === 'essay' ? typeof a === 'string' && a.trim().length > 0 : typeof a === 'number' && a >= 0;
+}
 
 export default function QuizRunner({
   quizId,
@@ -14,17 +21,18 @@ export default function QuizRunner({
   questions: PublicQuestion[];
 }) {
   const router = useRouter();
-  const [answers, setAnswers] = useState<number[]>(() => questions.map(() => -1));
+  const [answers, setAnswers] = useState<Ans[]>(() => questions.map((q) => (q.type === 'essay' ? '' : -1)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [warned, setWarned] = useState(false);
   const started = useRef(Date.now());
 
-  const answered = answers.filter((a) => a >= 0).length;
+  const answered = questions.filter((q, i) => isDone(q, answers[i])).length;
   const missing = questions.length - answered;
+  const hasEssay = questions.some((q) => q.type === 'essay');
 
-  function pick(i: number, o: number) {
-    setAnswers((a) => a.map((v, k) => (k === i ? o : v)));
+  function set(i: number, v: Ans) {
+    setAnswers((a) => a.map((x, k) => (k === i ? v : x)));
     setWarned(false);
   }
 
@@ -66,17 +74,47 @@ export default function QuizRunner({
           <div className="q-top">
             <span className="mono lab">Câu {i + 1}/{questions.length}</span>
             <span className="chip">{q.topic}</span>
+            {q.type === 'essay' && <span className="chip">Tự luận</span>}
           </div>
           <p className="qtext" id={`qt${i}`}>{q.q}</p>
-          <div className="opts" role="radiogroup" aria-labelledby={`qt${i}`}>
-            {q.options.map((text, o) => (
-              <label key={o} className={'opt' + (answers[i] === o ? ' picked' : '')}>
-                <input type="radio" name={`q${i}`} checked={answers[i] === o} onChange={() => pick(i, o)} />
-                <span className="mark">{q.type === 'tf' ? (o === 0 ? 'Đ' : 'S') : 'ABCDEF'.charAt(o)}</span>
-                <span className="otext">{text}</span>
-              </label>
-            ))}
-          </div>
+
+          {q.type === 'essay' ? (
+            <div>
+              <textarea
+                className="essay"
+                aria-labelledby={`qt${i}`}
+                placeholder="Nhập câu trả lời của bạn…"
+                maxLength={MAX_ESSAY_ANSWER_CHARS}
+                value={typeof answers[i] === 'string' ? (answers[i] as string) : ''}
+                onChange={(e) => set(i, e.target.value)}
+                disabled={busy}
+                style={{
+                  width: '100%',
+                  minHeight: 150,
+                  padding: 12,
+                  borderRadius: 10,
+                  border: '1px solid #d6dbe8',
+                  font: 'inherit',
+                  lineHeight: 1.5,
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div className="small muted" style={{ textAlign: 'right' }}>
+                {typeof answers[i] === 'string' ? (answers[i] as string).length : 0}/{MAX_ESSAY_ANSWER_CHARS}
+              </div>
+            </div>
+          ) : (
+            <div className="opts" role="radiogroup" aria-labelledby={`qt${i}`}>
+              {q.options.map((text, o) => (
+                <label key={o} className={'opt' + (answers[i] === o ? ' picked' : '')}>
+                  <input type="radio" name={`q${i}`} checked={answers[i] === o} onChange={() => set(i, o)} />
+                  <span className="mark">{q.type === 'tf' ? (o === 0 ? 'Đ' : 'S') : 'ABCDEF'.charAt(o)}</span>
+                  <span className="otext">{text}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       ))}
 
@@ -86,7 +124,7 @@ export default function QuizRunner({
       )}
       <div>
         <button className="btn" type="button" onClick={submit} disabled={busy}>
-          {busy ? 'Đang chấm…' : 'Nộp bài'}
+          {busy ? (hasEssay ? 'Đang chấm bài, có thể mất vài chục giây…' : 'Đang chấm…') : 'Nộp bài'}
         </button>
       </div>
     </div>
