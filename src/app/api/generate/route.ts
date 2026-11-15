@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   const extraText = String(body.extraText || '').trim();
   const n = [5, 10, 15, 20].includes(Number(body.n)) ? Number(body.n) : 10;
   const level: Level = ['de', 'vua', 'kho'].includes(body.level) ? body.level : 'vua';
-  const kind: Kind = ['mcq', 'tf', 'mix'].includes(body.kind) ? body.kind : 'mcq';
+  const kind: Kind = ['mcq', 'tf', 'mix', 'essay', 'full'].includes(body.kind) ? body.kind : 'mcq';
 
   // Giới hạn số lần tạo đề mỗi ngày để không cạn hạn mức miễn phí của Gemini.
   // Chỉ đề đã lưu thành công mới được tính, nên lỗi AI không làm mất lượt của người dùng.
