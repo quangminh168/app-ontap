@@ -17,25 +17,32 @@ export default async function SubjectPage({
   searchParams: { error?: string; doc?: string };
 }) {
   const { supabase, me } = await requireUser();
-  const { data: subject } = await supabase.from('subjects').select('id,name,description,owner_id').eq('id', params.id).single();
-  if (!subject) notFound();
-
-  const [{ data: docs }, { data: quizzes }, { data: reacts }] = await Promise.all([
+  // Bốn truy vấn độc lập chạy cùng lúc (trước đây môn học chạy riêng rồi mới tới ba truy vấn còn lại).
+  // question_count là cột tính sẵn (migration 004): không tải cả mảng câu hỏi của 20 đề chỉ để đếm.
+  const [subjectRes, docsRes, quizzesRes, reactsRes] = await Promise.all([
+    supabase.from('subjects').select('id,name,description,owner_id').eq('id', params.id).single(),
     supabase
       .from('documents')
       .select('id,title,is_public,hidden,owner_id,owner_name,likes,dislikes,size,created_at')
-      .eq('subject_id', subject.id)
+      .eq('subject_id', params.id)
       .order('likes', { ascending: false })
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true })
+      .limit(300),
     supabase
       .from('quizzes')
-      .select('id,title,level,kind,source,questions,created_at')
-      .eq('subject_id', subject.id)
+      .select('id,title,level,kind,source,question_count,created_at')
+      .eq('subject_id', params.id)
       .eq('owner_id', me.id)
       .order('created_at', { ascending: false })
       .limit(20),
-    supabase.from('doc_reactions').select('document_id,kind').eq('user_id', me.id),
+    supabase.from('doc_reactions').select('document_id,kind').eq('user_id', me.id).limit(1000),
   ]);
+  const subject = subjectRes.data;
+  if (!subject) notFound();
+  const docs = docsRes.data;
+  const quizzes = quizzesRes.data;
+  const reacts = reactsRes.data;
+  const needMigration = !!quizzesRes.error;
 
   const mineMap = new Map<string, 'like' | 'dislike'>(
     (reacts ?? []).map((r: any) => [r.document_id as string, r.kind as 'like' | 'dislike']),
@@ -68,6 +75,11 @@ export default async function SubjectPage({
       </div>
 
       {searchParams.error && <div className="msg err" role="alert">{searchParams.error}</div>}
+      {needMigration && (
+        <div className="msg err" role="alert">
+          Chưa cập nhật cơ sở dữ liệu: hãy chạy file migration-004-toc-do.sql trong Supabase SQL Editor.
+        </div>
+      )}
 
       <GenerateForm
         subjectId={subject.id}
@@ -111,7 +123,7 @@ export default async function SubjectPage({
                 <div className="item-main">
                   <div className="item-title">{q.title}</div>
                   <div className="small muted">
-                    {[q.level ? LEVELS[q.level as keyof typeof LEVELS] : '', q.kind ? KINDS[q.kind as keyof typeof KINDS] : '', `${(q.questions as unknown[]).length} câu`, fmtDate(q.created_at)]
+                    {[q.level ? LEVELS[q.level as keyof typeof LEVELS] : '', q.kind ? KINDS[q.kind as keyof typeof KINDS] : '', `${q.question_count ?? 0} câu`, fmtDate(q.created_at)]
                       .filter(Boolean)
                       .join(' · ')}
                   </div>

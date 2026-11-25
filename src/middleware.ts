@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getAuthUser } from '@/lib/auth-claims';
 
 const PUBLIC_PATHS = ['/', '/login', '/register', '/auth'];
 
@@ -28,9 +29,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
 
   const path = request.nextUrl.pathname;
   if (!user && !isPublic(path) && !path.startsWith('/api')) {

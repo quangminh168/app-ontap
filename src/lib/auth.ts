@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import type { Role } from '@/lib/types';
+import { getAuthUser } from '@/lib/auth-claims';
 
 export interface Me {
   id: string;
@@ -11,9 +12,7 @@ export interface Me {
 /** Lấy người dùng hiện tại và hồ sơ; chưa đăng nhập thì chuyển về /login. */
 export async function requireUser() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect('/login');
   const { data: profile } = await supabase.from('profiles').select('full_name,role').eq('id', user.id).single();
   const me: Me = {

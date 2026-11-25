@@ -2,12 +2,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
 import { signOut } from '@/app/auth/actions';
+import { getAuthUser } from '@/lib/auth-claims';
 
 export default async function Nav() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
 
   let name = '';
   let role = '';

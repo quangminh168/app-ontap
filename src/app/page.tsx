@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { fmtDate } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-claims';
 import DeleteDocument from '@/components/DeleteDocument';
 import FilterSelect from '@/components/FilterSelect';
 import LikeButtons from '@/components/LikeButtons';
@@ -29,9 +30,7 @@ type SP = { q?: string; page?: string; tab?: string; sub?: string; src?: string;
 
 export default async function Home({ searchParams }: { searchParams: SP }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
 
   const fbBanner = (
     <a
@@ -95,9 +94,6 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   }
 
   /* ---------- Đã đăng nhập: kho tài liệu ---------- */
-  const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  const isAdmin = prof?.role === 'admin';
-
   const q = (searchParams.q ?? '').trim().slice(0, 80);
   const tab = searchParams.tab === 'mine' ? 'mine' : 'all';
   const sub = UUID.test(searchParams.sub ?? '') ? (searchParams.sub as string) : '';
@@ -105,57 +101,63 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   const sort = searchParams.sort === 'likes' || searchParams.sort === 'title' ? searchParams.sort : 'new';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
-  // Tab "Của tôi" gồm tài liệu mình đăng và tài liệu mình đã thả tim
-  let likedIds: string[] = [];
-  if (tab === 'mine') {
-    const { data: lk } = await supabase
-      .from('doc_reactions')
-      .select('document_id')
-      .eq('user_id', user.id)
-      .eq('kind', 'like')
-      .limit(200);
-    likedIds = (lk ?? []).map((r: any) => r.document_id as string);
-  }
-
-  let query: any = supabase
+  // Truy vấn danh sách tài liệu (tab "Của tôi" gồm tài liệu mình đăng và tài liệu mình đã thả tim)
+  const docsQuery = (likedIds: string[]) => {
+    let query: any = supabase
     .from('documents')
     .select('id,title,subject_id,owner_id,owner_name,is_public,likes,dislikes,size,created_at,subjects(name)', {
       count: 'exact',
     });
+    if (tab === 'mine') {
+      query = likedIds.length
+        ? query.or(`owner_id.eq.${user.id},id.in.(${likedIds.join(',')})`)
+        : query.eq('owner_id', user.id);
+    } else {
+      query = query.eq('is_public', true).eq('hidden', false);
+    }
+    if (sub) query = query.eq('subject_id', sub);
+    if (src === 'system') query = query.is('owner_id', null);
+    if (src === 'user') query = query.not('owner_id', 'is', null);
+    if (q) query = query.ilike('search_text', `%${norm(q)}%`);
+    if (sort === 'likes') query = query.order('likes', { ascending: false }).order('created_at', { ascending: false });
+    else if (sort === 'title') query = query.order('title', { ascending: true });
+    else query = query.order('created_at', { ascending: false });
+    return query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+  };
+
+  // Các truy vấn không phụ thuộc nhau chạy CÙNG LÚC (trước đây chạy lần lượt: hồ sơ, danh sách, rồi mới tới thả tim)
+  const rest = Promise.all([
+    supabase.from('profiles').select('role').eq('id', user.id).single(),
+    supabase.from('subjects').select('id,name').or('owner_id.is.null,is_public.eq.true,owner_id.eq.' + user.id).order('sort').order('name'),
+    supabase.from('attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('wrong_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase
+      .from('attempts')
+      .select('id,score,total,created_at,quizzes(title)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    // trạng thái thả tim của bạn (RLS chỉ trả về của chính bạn); lấy luôn để khỏi chờ danh sách tài liệu xong
+    supabase.from('doc_reactions').select('document_id,kind').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1000),
+  ]);
+
+  let docsRes: any;
+  let restRes: any[];
   if (tab === 'mine') {
-    query = likedIds.length
-      ? query.or(`owner_id.eq.${user.id},id.in.(${likedIds.join(',')})`)
-      : query.eq('owner_id', user.id);
-  } else {
-    query = query.eq('is_public', true).eq('hidden', false);
-  }
-  if (sub) query = query.eq('subject_id', sub);
-  if (src === 'system') query = query.is('owner_id', null);
-  if (src === 'user') query = query.not('owner_id', 'is', null);
-  if (q) query = query.ilike('search_text', `%${norm(q)}%`);
-  if (sort === 'likes') query = query.order('likes', { ascending: false }).order('created_at', { ascending: false });
-  else if (sort === 'title') query = query.order('title', { ascending: true });
-  else query = query.order('created_at', { ascending: false });
-  query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-
-  const [{ data: docs, count }, { data: subjectList }, { count: attemptCount }, { count: wrongCount }, { data: recent }] =
-    await Promise.all([
-      query,
-      supabase.from('subjects').select('id,name').or('owner_id.is.null,is_public.eq.true,owner_id.eq.' + user.id).order('sort').order('name'),
-      supabase.from('attempts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('wrong_questions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase
-        .from('attempts')
-        .select('id,score,total,created_at,quizzes(title)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5),
+    const [r, lk] = await Promise.all([
+      rest,
+      supabase.from('doc_reactions').select('document_id').eq('user_id', user.id).eq('kind', 'like').limit(200),
     ]);
-
-  const ids = (docs ?? []).map((d: any) => d.id as string);
-  const { data: reacts } = ids.length
-    ? await supabase.from('doc_reactions').select('document_id,kind').in('document_id', ids)
-    : { data: [] as any[] };
+    restRes = r;
+    const likedIds = ((lk as any).data ?? []).map((x: any) => x.document_id as string);
+    docsRes = await docsQuery(likedIds);
+  } else {
+    [restRes, docsRes] = await Promise.all([rest, docsQuery([])]);
+  }
+  const [{ data: prof }, { data: subjectList }, { count: attemptCount }, { count: wrongCount }, { data: recent }, { data: reacts }] =
+    restRes as any[];
+  const { data: docs, count } = docsRes;
+  const isAdmin = prof?.role === 'admin';
   const mineMap = new Map<string, 'like' | 'dislike'>((reacts ?? []).map((r: any) => [r.document_id, r.kind]));
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
